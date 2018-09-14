@@ -1,5 +1,4 @@
 #include <iostream>
-#include <vector>
 
 /**
  * Definition for singly-linked list.
