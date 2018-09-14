@@ -103,4 +103,5 @@ int main()
     int arr2[] = {5,6,4};//0
     Solution example;
     example.test(arr1, 3, arr2, 3);
+    return 0;
 }
