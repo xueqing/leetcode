@@ -34,9 +34,25 @@ using namespace std;
     Each character S[i] will be in the set {'a', 'b', 'c', 'd'}.
  */
 
-/*
- * time limited for computing repeated values with the same start and end
-int countPalindromicSubsequences(string S) {
+/**
+ * 版本 1：
+ *     保存每种字母 (a,b,c,d) 出现的下标到 inds 数组，字母出现次数不为 0 时，总数加 1；字母出现次数大于 2 时，总数加 1，并选出两个字母用于构造回文串
+ * 思路：
+ *     1. 先选出两个相同的字母 str1(aa,bb,cc,dd)，分别对应最小下标 start 和最大下标 end，即在字符串 S 中最靠边的位置
+ *     2. 回文串长度加 1：从 inds 中选择下标 index(index > start 且 index < end)，在 str1(aa,bb,cc,dd) 中插入一个字母(a,b,c,d) 成为新的回文串 str2
+ *        str2 相当于在 start 和 end 直接再选择一个字母成为新的回文串
+ *     3. 回文串长度加 2：从 inds 中选择下标 ss(ss > start) 和 ee(ee < end)，在 str1(aa,bb,cc,dd) 中插入两个相同字母(aa,bb,cc,dd) 成为新的回文串 str3
+ *        str3 相当于在 start 和 end 直接再选择两个相同的字母成为新的回文串
+ *     4. 处理回文串 str3，更新 start=ss 和 end=ee，长度分别加 1 和加 2，重复上述流程
+ * 代码解释：
+ *     const int DIFF_CHAR = 4;//有 4 种字母
+ *     array<vector<int>, DIFF_CHAR> inds;  //保存 4 种字母出现的下标，即预处理 S，保存对应的字母和下标
+ *     int sum = 0;                         //保存回文串的总数
+ *     vector<pair<int, int> > res;         //pair 保存了每次处理回文串的 start 和 end，开始为空
+ * 问题：
+ *     因为没有保存中间值(即 start 和 end 相同)，重复计算导致超时
+ */
+int countPalindromicSubsequences1(string S) {
     const int DIFF_CHAR = 4;
 
     array<vector<int>, DIFF_CHAR> inds;
@@ -117,8 +133,116 @@ int countPalindromicSubsequences(string S) {
     }
     return sum;
 }
-*/
 
+/**
+ * 版本 2：
+ *     添加数组保存中间值(即 start 和 end 相同)
+ * 思路：
+ *     实现回调函数求下标范围 [start, end] 对应的回文子串数目，每次更新数组记录中间值
+ * 代码解释：
+ *     array<set<int>, 4> m_inds;   //保存 4 种字母出现的下标，即预处理 S，保存对应的字母和下标
+ *     int m_sumInds[4][1001];      //保存 4 种字母在 S 中从开始到某个位置出现的次数，用于查找在某个范围内是否出现，可快速筛查是否有满足要求的字母可以用于构造新的回文串，初始化为 0
+ *     int m_sumSub[1001][1001];    //保存中间值，对应 S 任意两个位置 [start, end] 对应的回文串数目，初始化为 -1
+ *                                  //回文串的总数即 m_sumSub[1][S.length()]
+ * 问题：
+ *     使用 set::upper_bound 可以快速求出满足范围的新的 ss，但是查找对应的 ee 还需要遍历数组
+ */
+class Solution2 {
+public:
+    const int N_MODE =  pow(10, 9) + 7;
+    size_t m_lenStr = -1;
+    array<set<int>, 4> m_inds;
+    int m_sumInds[4][1001];
+    int m_sumSub[1001][1001];
+
+    int countPalindromicSubsequences(string S) {
+        m_lenStr = S.length();
+
+        for(size_t i=0; i<4; i++)
+            for(size_t j=0; j<=m_lenStr; j++)
+                m_sumInds[i][j] = 0;
+
+        for(size_t i=0; i<=m_lenStr; i++)
+            for(size_t j=0; j<=m_lenStr; j++)
+                m_sumSub[i][j] = -1;
+
+        for(size_t i=0; i<m_lenStr; i++)
+        {
+            int index = S.at(i)-'a';
+            m_inds.at(index).emplace(i+1);
+            m_sumInds[index][i+1] = m_sumInds[index][i] + 1;
+        }
+
+        for(size_t i=0; i<4; i++)
+            for(size_t j=1; j<=m_lenStr; j++)
+                m_sumInds[i][j] = m_sumInds[i][j-1] + m_sumInds[i][j];
+
+        int sum = 0;
+        for(size_t i=0; i<4; i++)
+        {
+            if(m_sumInds[i][m_lenStr] != 0)
+            {
+                sum = (sum + 1) % N_MODE;
+                if(m_sumInds[i][m_lenStr] > 1)
+                {
+                    int ss = *m_inds.at(i).begin();
+                    int ee = *m_inds.at(i).rbegin();
+                    sum = (sum + SubOfString(ss, ee)) % N_MODE;
+                }
+            }
+        }
+        return sum;
+    }
+
+    int SubOfString(int start, int end)
+    {
+        if(start < 0 || end < 0)        return 0;
+        if(m_sumSub[start][end] != -1)  return m_sumSub[start][end];
+
+        int sum = 1;
+        for(size_t i=0; i<4; i++)
+        {
+            if(m_sumInds[i][end-1] != m_sumInds[i][start])
+            {
+                sum = (sum + 1) % N_MODE;//add length by 1 for pairs
+                if(m_sumInds[i][end-1] - m_sumInds[i][start] > 1)//add length by 2 for pairs
+                {
+                    int ss = *m_inds.at(i).upper_bound(start);
+                    for(int ee=end-1; ee>ss; ee--)
+                    {
+                        if(m_sumInds[i][ee] != m_sumInds[i][ee-1])
+                        {
+                            sum = (sum + SubOfString(ss, ee)) % N_MODE;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        m_sumSub[start][end] = sum;
+        return m_sumSub[start][end];
+    }
+};
+
+/**
+ * 版本 3：
+ *     优化查找满足要求的 ss 和 ee 的过程
+ * 构造思路：
+ *     添加数组保存字母在某个位置之前和之后最近出现的下标
+ * 代码解释：
+ *     int m_lowerInds[4][1001];    //保存字母在某个位置之后最近出现的下标，初始化为 0
+ *     int m_upperInds[4][1001];    //保存字母在某个位置之前最近出现的下标，初始化为 0
+ *     int m_sumSub[start][end];    //保存下标从 start 到 end 的子串有多少个回文串，初始化为 -1
+ * 举例：
+ *     S = 'bccb'
+ *     m_lowerInds['b'-'a'][1001]={1,4,4,4}, m_upperInds['b'-'a'][1001]={1,1,1,4}
+ *     m_lowerInds['c'-'a'][1001]={2,2,3,0}, m_upperInds['c'-'a'][1001]={0,2,3,3}
+ *     m_lowerInds[i][1])       对应字母 'a'+i 在 S 中第一次出现的下标
+ *     m_upperInds[i][m_lenStr] 对应字母 'a'+i 在 S 中最后一次出现的下标
+ *     m_lowerInds[i][start])   对应字母 'a'+i 在 S 中 start 之后(包括 start)第一次出现(最靠近 start)的下标     
+ *     m_upperInds[i][end]      对应字母 'a'+i 在 S 中 end 之前(包括 end)第一次出现(最靠近 end)的下标
+ */
 class Solution {
 public:
     const int N_MODE =  pow(10, 9) + 7;
