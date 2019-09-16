@@ -28,151 +28,145 @@
 
 #include <iostream>
 #include <vector>
-#include <map>
-#include <unordered_map>
 #include <math.h>
-#include <queue>
+#include <stdint.h>
+#include <assert.h>
 
 using namespace std;
 
 /**
- * 版本 3：
- *     优化查找满足要求的 ss 和 ee 的过程
- * 构造思路：
- *     添加数组保存字母在某个位置之前和之后最近出现的下标
+ * 思路：
+ *     保存建筑物的房顶线段，起初是 x 轴上一条完整的线段，即高度为 0。
+ *     之后每次处理一个建筑物，需要分割已有线段，将处理建筑物房顶线段放在合适的位置
  * 代码解释：
- *     int m_lowerInds[4][1001];    //保存字母在某个位置之后最近出现的下标，初始化为 0
- * 举例：
- *     S = 'bccb'
+ *     vector<Line> m_lines;    //保存线段
+ *     int maxX = INT32_MIN;    //保存建筑物坐标 L 最大值，即线段最大长度
+ *     size_t m_pos = 0;        //保存上一个建筑物 L 对应的位置，因为建筑物输入是按照 L 递增的
+ *     void insertABuilding(size_t index, int left, int right, int height); //在第 index 个线段的位置插入一根新线段
+ *     void mergeLines(vector<vector<int>> &res); //合并线段，记录对应的坐标点。当高度与前者不同时，记录 L 和高度
  */
 class Solution {
+    struct Line
+    {
+        int left;
+        int right;
+        int height;
+
+        Line(int l, int r, int h) : left(l), right(r), height(h){}
+    };
+
 public:
+    void insertABuilding(size_t index, int left, int right, int height)
+    {
+        vector<Line>::iterator it = m_lines.begin()+index;
+        int formall = it->left;
+        int formalr = it->right;
+        int formalh = it->height;
+        if(left == right || right <= formall)
+            return;
+        else if(left >= formalr)
+            insertABuilding(index+1, left, right, height);
+        else if(height <= formalh)
+            insertABuilding(index, min(right, formalr), right, height);
+        else if(left > formall)
+        {
+            it->right = left;
+            m_lines.emplace(it+1, left, formalr, formalh);
+            m_pos++;
+            insertABuilding(index+1, left, right, height);
+        }
+        else if(left == formall)
+        {
+            it->height = height;
+            if(right >= formalr)
+                insertABuilding(index, formalr, right, height);
+            else
+            {
+                it->right = right;
+                m_lines.emplace(it+1, right, formalr, formalh);
+            }
+        }
+    }
+
+    void mergeLines(vector<vector<int>> &res)
+    {
+        vector<int> tmp;
+        tmp.resize(2, 0);
+        tmp.at(0) = m_lines.front().left;
+        tmp.at(1) = m_lines.front().height;
+        res.emplace_back(tmp);
+        for(size_t i=1; i<m_lines.size(); i++)
+        {
+            if(m_lines.at(i).height != m_lines.at(i-1).height)
+            {
+                tmp.at(0) = m_lines.at(i).left;
+                tmp.at(1) = m_lines.at(i).height;
+                res.emplace_back(tmp);
+            }
+        }
+        tmp.at(0) = m_lines.back().right;
+        tmp.at(1) = 0;
+        res.emplace_back(tmp);
+    }
+
     vector<vector<int>> getSkyline(vector<vector<int>>& buildings) {
-        if(buildings.empty()) return m_res;
+        vector<vector<int>> res;
+        if(buildings.empty()) return res;
 
-        if(buildings.size() == 1)
-        {
-            m_res.emplace_back(buildings.front().at(0), buildings.front().at(2));
-            m_res.emplace_back(buildings.front().at(1), 0);
-            return m_res;
-        }
+        int maxX = INT32_MIN;
+        for(size_t i=0; i<buildings.size(); i++)
+            maxX = max(maxX, buildings.at(i).at(1));
+        m_lines.emplace_back(buildings.front().at(0), maxX, 0);
 
-        multimap<int, vector<vector<int>>::iterator> xmap;
-        vector<vector<int>> points;
+        for(size_t i=0; i<buildings.size(); i++)
+            insertABuilding(m_pos, buildings.at(i).at(0), buildings.at(i).at(1), buildings.at(i).at(2));
 
-        int nPoints = 0;
-        int lf = buildings.front().at(0);
-        int rf = buildings.front().at(1);
-        int hf = buildings.front().at(2);
-        points.emplace_back(lf, rf, hf);
-        xmap.emplace(lf, nPoints++);
-
-        int lc=-1, rc=-1, hc=-1;
-        for(size_t i=1; i<buildings.size(); i++)
-        {
-            lc = buildings.at(i).at(0);
-            rc = buildings.at(i).at(1);
-            hc = buildings.at(i).at(2);
-            if(lc > rf)
-            {
-                points.emplace_back(lc, rc, hc);
-                xmap.emplace(lc, nPoints++);
-                lf = lc;
-                rf = rc;
-                hf = hc;
-            }
-            else if(rc < rf)
-            {
-                if(hc <= hf)
-                    continue;
-                points.at(xmap[lf]).at(1) = lc;
-                points.emplace_back(lc, rc, hc);
-                xmap.emplace(lc, nPoints++);
-                points.emplace_back(rc, rf, hf);
-                xmap.emplace(rc, nPoints++);
-                lf = rc;
-            }
-            else if(rc > rf)
-            {
-                points.at(xmap[lf]).at(1) = lc;
-                points.emplace_back(lc, rc, hc);
-                xmap.emplace(lc, nPoints++);
-                points.emplace_back(rc, rf, hf);
-                xmap.emplace(rc, nPoints++);
-                lf = rc;
-            }
-            points.emplace_back(buildings.at(i).at(0), buildings.at(i).at(1), buildings.at(i).at(2));
-            xmap.emplace(buildings.at(i).at(0), j++);
-        }
-
-//        int xfront = buildings.front().at(0);
-//        int yfront = 0;
-//        m_res.emplace(xfront, yfront);
-
-//        int xcur = -1, ycur = -1;
-//        for(auto it=points.begin(); it!=points.end(); it++)
-//        {
-//            xcur = it->first;
-//            ycur = it->second;
-//            if(xcur != xfront && ycur != yfront)
-//            {
-//                xfront = xcur;
-//                yfront = ycur;
-//                m_res.emplace_back(xfront, yfront);
-//            }
-//            else if(xcur != xfront && ycur == yfront)
-//            {
-//                xfront = xcur;
-//            }
-//            else if(ycur > yfront)
-//            {
-//                yfront = ycur;
-//                m_res.back().at(1) = yfront;
-//            }
-//        }
-
-        return m_res;
+        mergeLines(res);
+        return res;
     }
 
 private:
-    vector<vector<int>> m_res;
+    vector<Line> m_lines;
+    size_t m_pos = 0;
 };
 
-string ConvertVectorToString(vector<vector<int>>& in) {
-    string str;
-    str.resize(in.size() << 1);
-
-    size_t index = -1;
-    str[++index] = '{';
-    for(auto &it:in)
+bool CompareVectorOfInt(vector<vector<int>>& vec1, vector<vector<int>> &vec2) {
+    if(vec1.size() != vec2.size()) return false;
+    for(size_t i=0; i<vec1.size(); i++)
     {
-        str[++index] = it.front()+'0';
-        str[++index] = it.back()+'0';
+        if(vec1.at(i).at(0) != vec2.at(i).at(0) || vec1.at(i).at(1) != vec2.at(i).at(1))
+            return false;
     }
-
-    str[++index] = '}';
-    return str;
+    return true;
 }
 
 int main()
 {
-    vector<pair<vector<vector<int>>, string>> test;
+    vector<pair<vector<vector<int>>, vector<vector<int>>>> test;
     {
-        //[[2,9,10],[3,7,15],[5,12,12],[15,20,10],[19,24,8]]
         vector<vector<int>> in = {{2,9,10},{3,7,15},{5,12,12},{15,20,10},{19,24,8}};
-        //[ [2 10], [3 15], [7 12], [12 0], [15 10], [20 8], [24, 0] ]
-        string out = "{{2,10},{3,15},{7,12},{12,0},{15,10},{20,8},{24,0}}";
+        vector<vector<int>> out = {{2,10},{3,15},{7,12},{12,0},{15,10},{20,8},{24,0}};
+        test.emplace_back(in, out);
+    }
+
+    {
+        vector<vector<int>> in = {{0,1,3}};
+        vector<vector<int>> out = {{0,3},{1,0}};
         test.emplace_back(in, out);
     }
 
     for(auto it : test)
     {
         vector<vector<int>> &in = it.first;
-        string &outStr = it.second;
+        vector<vector<int>> &out = it.second;
         Solution solu;
         vector<vector<int>> res = solu.getSkyline(in);
-        string resStr = ConvertVectorToString(res);
-        cout << "result=" << resStr << "; answer=" << outStr << "; match=" << (resStr == outStr ? "Y" : "Nooooo") << endl;
+        if(!CompareVectorOfInt(res, out))
+        {
+            cout << "match=Nooooo" << endl;
+            assert(false);
+        }
+        cout << "match=Y" << endl;
     }
 
     return 0;
