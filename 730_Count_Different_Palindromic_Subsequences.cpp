@@ -234,6 +234,8 @@ public:
  *     int m_lowerInds[4][1001];    //保存字母在某个位置之后最近出现的下标，初始化为 0
  *     int m_upperInds[4][1001];    //保存字母在某个位置之前最近出现的下标，初始化为 0
  *     int m_sumSub[start][end];    //保存下标从 start 到 end 的子串有多少个回文串，初始化为 -1
+ * 关于 Solution3
+ *     Solution3 使用 vector 替换数组，初始化速度更快，但是内存占用(39-40MB)相比数组(12-13MB)增大
  * 举例：
  *     S = 'bccb'
  *     m_lowerInds['b'-'a'][1001]={1,4,4,4}, m_upperInds['b'-'a'][1001]={1,1,1,4}
@@ -243,49 +245,50 @@ public:
  *     m_lowerInds[i][start])   对应字母 'a'+i 在 S 中 start 之后(包括 start)第一次出现(最靠近 start)的下标     
  *     m_upperInds[i][end]      对应字母 'a'+i 在 S 中 end 之前(包括 end)第一次出现(最靠近 end)的下标
  */
+
 class Solution {
 public:
-    const int N_MODE =  pow(10, 9) + 7;
-    size_t m_lenStr = -1;
+    const int N_MODE =  1e9 + 7;
     int m_lowerInds[4][1001];
     int m_upperInds[4][1001];
     int m_sumSub[1001][1001];
 
+    inline int myMod(int num) {return num < N_MODE ? num : num - N_MODE;}
+
     int countPalindromicSubsequences(string S) {
-        m_lenStr = S.length();
+        size_t lenStr = S.length();
 
         for(size_t i=0; i<4; i++)
-            for(size_t j=0; j<=m_lenStr; j++)
-                m_lowerInds[i][j] = m_upperInds[i][j] = 0;
+            memset(m_lowerInds[i], 0, sizeof(int)*(lenStr+1));
+        for(size_t i=0; i<4; i++)
+            memset(m_upperInds[i], 0, sizeof(int)*(lenStr+1));
+        for(size_t i=0; i<=lenStr; i++)
+            memset(m_sumSub[i], -1, sizeof(int)*(lenStr+1));
 
-        for(size_t i=0; i<=m_lenStr; i++)
-            for(size_t j=0; j<=m_lenStr; j++)
-                m_sumSub[i][j] = -1;
-
-        for(size_t i=0; i<m_lenStr; i++)
+        for(size_t i=0; i<lenStr; i++)
             m_lowerInds[S.at(i)-'a'][i+1] = m_upperInds[S.at(i)-'a'][i+1] = i + 1;
 
         for(size_t i=0; i<4; i++)
-            for(size_t j=m_lenStr-1; j>=1; j--)
+            for(size_t j=lenStr-1; j>=1; j--)
                 if(m_lowerInds[i][j] == 0)
                     m_lowerInds[i][j] = m_lowerInds[i][j+1];
 
         for(size_t i=0; i<4; i++)
-            for(size_t j=2; j<=m_lenStr; j++)
+            for(size_t j=2; j<=lenStr; j++)
                 if(m_upperInds[i][j] == 0)
                     m_upperInds[i][j] = m_upperInds[i][j-1];
 
         int sum = 0;
         for(size_t i=0; i<4; i++)
         {
-            if(m_upperInds[i][m_lenStr] != 0)
+            if(m_upperInds[i][lenStr] != 0)
             {
-                sum = (sum + 1) % N_MODE;
-                if(m_upperInds[i][m_lenStr] != m_lowerInds[i][1])
+                sum = myMod(sum + 1);
+                if(m_upperInds[i][lenStr] != m_lowerInds[i][1])
                 {
                     int ss = m_lowerInds[i][1];
-                    int ee = m_upperInds[i][m_lenStr];
-                    sum = (sum + SubOfString(ss, ee)) % N_MODE;
+                    int ee = m_upperInds[i][lenStr];
+                    sum = myMod(sum + SubOfString(ss, ee));
                 }
             }
         }
@@ -302,12 +305,83 @@ public:
         {
             if(m_upperInds[i][end-1] > start)
             {
-                sum = (sum + 1) % N_MODE;//add length by 1 for pairs
+                sum = myMod(sum + 1);//add length by 1 for pairs
                 if(m_upperInds[i][end-1] > m_lowerInds[i][start+1])//add length by 2 for pairs
                 {
                     int ss = m_lowerInds[i][start+1];
                     int ee = m_upperInds[i][end-1];
-                    sum = (sum + SubOfString(ss, ee)) % N_MODE;
+                    sum = myMod(sum + SubOfString(ss, ee));
+                }
+            }
+        }
+
+        m_sumSub[start][end] = sum;
+        return m_sumSub[start][end];
+    }
+};
+
+class Solution3 {
+public:
+    const int N_MODE =  1e9 + 7;
+    vector<vector<int>> m_lowerInds;
+    vector<vector<int>> m_upperInds;
+    vector<vector<int>> m_sumSub;
+
+    inline int myMod(int num) {return num < N_MODE ? num : num - N_MODE;}
+
+    int countPalindromicSubsequences(string S) {
+        size_t lenStr = S.length();
+
+        m_lowerInds.resize(4, vector<int>(lenStr+1, 0));
+        m_upperInds.resize(4, vector<int>(lenStr+1, 0));
+        m_sumSub.resize(lenStr+1, vector<int>(lenStr+1, -1));
+
+        for(size_t i=0; i<lenStr; i++)
+            m_lowerInds[S.at(i)-'a'][i+1] = m_upperInds[S.at(i)-'a'][i+1] = i + 1;
+
+        for(size_t i=0; i<4; i++)
+            for(size_t j=lenStr-1; j>=1; j--)
+                if(m_lowerInds[i][j] == 0)
+                    m_lowerInds[i][j] = m_lowerInds[i][j+1];
+
+        for(size_t i=0; i<4; i++)
+            for(size_t j=2; j<=lenStr; j++)
+                if(m_upperInds[i][j] == 0)
+                    m_upperInds[i][j] = m_upperInds[i][j-1];
+
+        int sum = 0;
+        for(size_t i=0; i<4; i++)
+        {
+            if(m_upperInds[i][lenStr] != 0)
+            {
+                sum = myMod(sum + 1);
+                if(m_upperInds[i][lenStr] != m_lowerInds[i][1])
+                {
+                    int ss = m_lowerInds[i][1];
+                    int ee = m_upperInds[i][lenStr];
+                    sum = myMod(sum + SubOfString(ss, ee));
+                }
+            }
+        }
+        return sum;
+    }
+
+    int SubOfString(int start, int end)
+    {
+        if(start < 0 || end < 0)        return 0;
+        if(m_sumSub[start][end] != -1)  return m_sumSub[start][end];
+
+        int sum = 1;
+        for(size_t i=0; i<4; i++)
+        {
+            if(m_upperInds[i][end-1] > start)
+            {
+                sum = myMod(sum + 1);//add length by 1 for pairs
+                if(m_upperInds[i][end-1] > m_lowerInds[i][start+1])//add length by 2 for pairs
+                {
+                    int ss = m_lowerInds[i][start+1];
+                    int ee = m_upperInds[i][end-1];
+                    sum = myMod(sum + SubOfString(ss, ee));
                 }
             }
         }
